@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Genie Chat</title>
+<style>
+  :root {
+    --bg: #ffffff; --panel: #f4f5f7; --fg: #1b1f24; --muted: #5a6472;
+    --accent: #2272b4; --user: #2272b4; --bot: #e9ebef; --border: #d6dae1;
+    --code-bg: #0f1420; --code-fg: #e6edf3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10151c; --panel: #171d26; --fg: #e6edf3; --muted: #9aa6b2;
+      --accent: #4a9be0; --user: #2a6fb0; --bot: #1f2733; --border: #2a3340;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--fg);
+    display: flex; flex-direction: column;
+  }
+  header {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    font-weight: 600; display: flex; align-items: center; gap: 8px;
+  }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  #log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 90%; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--user); color: #fff; border-bottom-right-radius: 3px; }
+  .msg.bot { align-self: flex-start; background: var(--bot); color: var(--fg); border-bottom-left-radius: 3px; }
+  .msg.error { align-self: flex-start; background: #b4232a; color: #fff; }
+  details { margin-top: 8px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  pre { background: var(--code-bg); color: var(--code-fg); padding: 10px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+  table { border-collapse: collapse; margin-top: 8px; font-size: 12px; width: 100%; }
+  th, td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
+  th { background: var(--panel); }
+  .thinking { color: var(--muted); font-style: italic; }
+  form { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--panel); }
+  input[type=text] { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); }
+  button { padding: 10px 16px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+<header><span class="dot"></span> Genie Chat</header>
+<div id="log"></div>
+<form id="form" autocomplete="off">
+  <input id="q" type="text" placeholder="Ask a question about the data…" />
+  <button id="send" type="submit">Send</button>
+</form>
+
+<script>
+// Same-origin by default (when served by the backend). To embed elsewhere, set
+// window.GENIE_BACKEND = "https://your-cbp-backend.example.gov" before this loads.
+const BACKEND = (window.GENIE_BACKEND || "").replace(/\/$/, "");
+const log = document.getElementById("log");
+const form = document.getElementById("form");
+const input = document.getElementById("q");
+const sendBtn = document.getElementById("send");
+let conversationId = null;
+
+function bubble(cls, text) {
+  const el = document.createElement("div");
+  el.className = "msg " + cls;
+  el.textContent = text;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+function renderAnswer(data) {
+  const el = document.createElement("div");
+  el.className = "msg bot";
+  el.textContent = data.answer || "(no text answer)";
+
+  if (data.columns && data.rows && data.rows.length) {
+    const table = document.createElement("table");
+    const thead = document.createElement("tr");
+    data.columns.forEach(c => { const th = document.createElement("th"); th.textContent = c; thead.appendChild(th); });
+    table.appendChild(thead);
+    data.rows.slice(0, 50).forEach(r => {
+      const tr = document.createElement("tr");
+      r.forEach(v => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); });
+      table.appendChild(tr);
+    });
+    el.appendChild(table);
+  }
+
+  if (data.sql) {
+    const det = document.createElement("details");
+    det.innerHTML = "<summary>View SQL</summary>";
+    const pre = document.createElement("pre");
+    pre.textContent = data.sql;
+    det.appendChild(pre);
+    el.appendChild(det);
+  }
+
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+  bubble("user", question);
+  input.value = "";
+  sendBtn.disabled = true;
+  const thinking = bubble("bot thinking", "Genie is thinking…");
+
+  try {
+    const resp = await fetch(BACKEND + "/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, conversation_id: conversationId }),
+    });
+    const data = await resp.json();
+    thinking.remove();
+    if (!resp.ok || data.error) {
+      bubble("error", data.error || data.detail || ("Request failed: " + resp.status));
+    } else {
+      conversationId = data.conversation_id || conversationId;
+      renderAnswer(data);
+    }
+  } catch (err) {
+    thinking.remove();
+    bubble("error", "Network error: " + err.message);
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+});
+</script>
+</body>
+</html>

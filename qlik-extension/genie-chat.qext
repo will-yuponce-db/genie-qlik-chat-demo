@@ -1,0 +1,9 @@
+{
+  "name": "Genie Chat",
+  "description": "Embedded Databricks Genie chat for Qlik Sense sheets. Calls a backend that holds the service principal; no Databricks credentials in the browser.",
+  "type": "visualization",
+  "version": "0.1.0",
+  "icon": "chat",
+  "author": "Field Engineering",
+  "supportZoom": false
+}

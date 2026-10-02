@@ -1,0 +1,5 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+databricks-sdk>=0.30
+requests>=2.31
+pydantic>=2
