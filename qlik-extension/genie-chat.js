@@ -46,8 +46,19 @@ define([], function () {
       return el;
     }
 
+    // Minimal, safe markdown: escape HTML first, then render **bold** / *italic*.
+    function mdToHtml(s) {
+      s = (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+      return s;
+    }
+
     function renderAnswer(data) {
-      var el = bubble("bot", data.answer || "(no text answer)");
+      var el = bubble("bot", "");
+      var ans = document.createElement("div");
+      ans.innerHTML = mdToHtml(data.answer || "(no text answer)");
+      el.appendChild(ans);
       if (data.columns && data.rows && data.rows.length) {
         var table = document.createElement("table");
         table.style.borderCollapse = "collapse";
