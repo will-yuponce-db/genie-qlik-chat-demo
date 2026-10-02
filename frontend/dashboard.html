@@ -65,21 +65,10 @@
   .chat .head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 700; }
   .chat .head .spark { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg,#ff5f46,#ff3621); color: #fff; display: grid; place-items: center; font-size: 13px; }
   .chat .head .badge { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 500; }
-  .chat .log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-  .msg { max-width: 92%; padding: 9px 11px; border-radius: 12px; white-space: pre-wrap; word-wrap: break-word; }
-  .msg.user { align-self: flex-end; background: var(--user); color: #fff; border-bottom-right-radius: 3px; }
-  .msg.bot { align-self: flex-start; background: var(--bot); color: var(--ink); border-bottom-left-radius: 3px; }
-  .msg.error { align-self: flex-start; background: #b4232a; color: #fff; }
-  .msg.thinking { color: var(--muted); font-style: italic; background: transparent; }
-  .msg table { margin-top: 8px; font-size: 12px; }
-  .msg details { margin-top: 8px; }
-  .msg summary { cursor: pointer; color: var(--muted); font-size: 12px; }
-  .msg pre { background: #0f1420; color: #e6edf3; padding: 9px; border-radius: 7px; overflow-x: auto; font-size: 11.5px; }
-  .chat form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); }
-  .chat input { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
-  .chat button { padding: 10px 14px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
-  .chat button:disabled { opacity: .5; cursor: default; }
-  .hint { font-size: 11px; color: var(--muted); padding: 0 12px 10px; }
+  .hint { font-size: 11px; color: var(--muted); padding: 6px 12px 8px; }
+  /* The Qlik extension (genie-chat.js) renders itself into here and styles its own
+     bubbles/table/SQL inline — exactly as it would inside a Qlik sheet. */
+  #genie-ext { flex: 1; min-height: 0; }
 </style>
 </head>
 <body>
@@ -119,15 +108,12 @@
       </div>
     </div>
 
-    <!-- LIVE chat panel: identical to what the Qlik extension renders -->
+    <!-- LIVE chat panel: this renders the ACTUAL Qlik extension code (qlik-extension/
+         genie-chat.js), so what you see here is what the Qlik sheet would show. -->
     <aside class="chat">
       <div class="head"><span class="spark">✦</span> Ask Genie <span class="badge">Databricks Genie · live</span></div>
-      <div class="log" id="log"></div>
       <div class="hint">Try: “average fare by pickup zip” or “how many trips are in the data?”</div>
-      <form id="form" autocomplete="off">
-        <input id="q" type="text" placeholder="Ask about the data…" />
-        <button id="send" type="submit">Send</button>
-      </form>
+      <div id="genie-ext"></div>
     </aside>
   </div>
 
@@ -145,74 +131,20 @@
     `<tr><td>${z[0]}</td><td class="n">${z[1].toLocaleString()}</td><td class="n">$${z[2].toFixed(2)}</td></tr>`
   ).join("");
 
-  // ---- LIVE chat: calls the real backend ----
-  const log = document.getElementById("log");
-  const form = document.getElementById("form");
-  const input = document.getElementById("q");
-  const sendBtn = document.getElementById("send");
-  let conversationId = null;
-
-  function bubble(cls, text) {
-    const el = document.createElement("div");
-    el.className = "msg " + cls;
-    el.textContent = text;
-    log.appendChild(el); log.scrollTop = log.scrollHeight;
-    return el;
-  }
-  // Minimal, safe markdown: escape HTML first, then render **bold** / *italic*.
-  function mdToHtml(s) {
-    s = (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-    return s;
-  }
-  function renderAnswer(data) {
-    const el = document.createElement("div");
-    el.className = "msg bot";
-    const ans = document.createElement("div");
-    ans.innerHTML = mdToHtml(data.answer || "(no text answer)");
-    el.appendChild(ans);
-    if (data.columns && data.rows && data.rows.length) {
-      const t = document.createElement("table");
-      const h = document.createElement("tr");
-      data.columns.forEach(c => { const th = document.createElement("th"); th.textContent = c; h.appendChild(th); });
-      t.appendChild(h);
-      data.rows.slice(0, 50).forEach(r => {
-        const tr = document.createElement("tr");
-        r.forEach(v => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); });
-        t.appendChild(tr);
-      });
-      el.appendChild(t);
-    }
-    if (data.sql) {
-      const d = document.createElement("details");
-      d.innerHTML = "<summary>View SQL</summary>";
-      const pre = document.createElement("pre"); pre.textContent = data.sql; d.appendChild(pre);
-      el.appendChild(d);
-    }
-    log.appendChild(el); log.scrollTop = log.scrollHeight;
-  }
-
-  bubble("bot", "Hi — ask me anything about the trips data behind this dashboard.");
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const question = input.value.trim();
-    if (!question) return;
-    bubble("user", question);
-    input.value = ""; sendBtn.disabled = true;
-    const thinking = bubble("thinking", "Genie is thinking…");
-    try {
-      const resp = await fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, conversation_id: conversationId }),
-      });
-      const data = await resp.json();
-      thinking.remove();
-      if (!resp.ok || data.error) bubble("error", data.error || data.detail || ("Request failed: " + resp.status));
-      else { conversationId = data.conversation_id || conversationId; renderAnswer(data); }
-    } catch (err) { thinking.remove(); bubble("error", "Network error: " + err.message); }
-    finally { sendBtn.disabled = false; input.focus(); }
+  // ---- define() shim so the REAL Qlik extension module runs in this plain browser ----
+  // Qlik would call define()/paint(); we capture the module and paint it ourselves into
+  // #genie-ext, pointing it at this same backend. This is the actual extension code, so
+  // the panel below is exactly what a Qlik sheet would render.
+  let __genieExt;
+  window.define = (deps, factory) => { __genieExt = factory(); };
+</script>
+<!-- the real extension file, served by the backend at /ext -->
+<script src="/ext/genie-chat.js"></script>
+<script>
+  // Qlik hands the extension a jQuery-ish $element; we provide the two bits it uses.
+  function $wrap(node) { return { html(h) { node.innerHTML = h; return this; }, 0: node }; }
+  __genieExt.paint($wrap(document.getElementById("genie-ext")), {
+    props: { backendUrl: window.location.origin },
   });
 </script>
 </body>

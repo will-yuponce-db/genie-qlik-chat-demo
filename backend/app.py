@@ -20,6 +20,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +29,9 @@ logger = logging.getLogger("genie-chat")
 # Lock this down in production to the Qlik Cloud tenant origin, e.g.
 #   ALLOWED_ORIGINS="https://your-tenant.us.qlikcloud.com"
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+REPO = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = REPO / "frontend"
+QLIK_DIR = REPO / "qlik-extension"
 
 app = FastAPI(title="Genie Chat backend")
 app.add_middleware(
@@ -37,6 +40,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Serve the real Qlik extension file so the demo dashboard can run the exact same code
+# the Qlik sheet would (faithful preview; no duplicate chat implementation).
+app.mount("/ext", StaticFiles(directory=QLIK_DIR), name="ext")
 
 _client = None
 
