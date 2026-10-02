@@ -82,23 +82,25 @@ class GenieClient:
             out["error"] = err.get("error") or str(err) or "Genie returned FAILED"
             return out
 
-        texts: list[str] = []
+        # Genie returns text and SQL in SEPARATE attachments (verified against the live
+        # API). Prefer the natural-language text; fall back to the query description.
+        text_parts: list[str] = []
+        desc_parts: list[str] = []
         for att in msg.get("attachments") or []:
             text = att.get("text") or {}
             if text.get("content"):
-                texts.append(text["content"])
+                text_parts.append(text["content"])
 
             query = att.get("query")
             if query:
                 out["sql"] = query.get("query")
                 if query.get("description"):
-                    texts.append(query["description"])
+                    desc_parts.append(query["description"])
                 att_id = att.get("attachment_id") or att.get("id")
                 if att_id:
                     self._attach_query_result(conversation_id, message_id, att_id, out)
 
-        if texts:
-            out["answer"] = "\n\n".join(texts)
+        out["answer"] = "\n\n".join(text_parts) if text_parts else ("\n\n".join(desc_parts) or None)
         return out
 
     def _attach_query_result(self, conversation_id: str, message_id: str, attachment_id: str, out: dict) -> None:

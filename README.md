@@ -51,20 +51,34 @@ qlik-extension/     Qlik Sense visualization extension (the production front end
 3. Confirm the **Genie Conversations API is on the CBP CSP allowlist** before a production
    commit (Genie is supported; verify this specific surface).
 
-## Run the demo locally
+## Demo it without Qlik
+
+You do **not** need Qlik to run or show this. The backend + a browser page is the whole
+working system; the Qlik extension is just the eventual host wrapper. Open the backend's
+`/` route to get a **Qlik-style dashboard with the live Genie chat docked on the right**.
 
 ```bash
 cd backend
-pip install -r requirements.txt
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt          # run in your own terminal (needs network)
 
-export GENIE_SPACE_ID=<32-hex-space-id>
-export DATABRICKS_CONFIG_PROFILE=fe-sandbox-will-wy-frm   # dev convenience; prod uses the SP vars
+# A ready-made demo Genie space (NYC taxi sample data) already exists:
+export GENIE_SPACE_ID=01f1bea84fde1d539597ded074d75616
+export DATABRICKS_CONFIG_PROFILE=fevm-will-wy-demo
 
 uvicorn app:app --reload --port 8000
 ```
 
-Open http://localhost:8000 and ask a question. This exercises the full
-start → poll → fetch loop against your Genie space.
+Then open:
+- **http://localhost:8000** — Qlik-style dashboard + live chat (the demo surface)
+- **http://localhost:8000/chat** — the bare chat UI (what the Qlik extension renders)
+
+Ask e.g. *"average fare by pickup zip"* or *"top 5 pickup zips by trips"*. This exercises
+the real start → poll → fetch loop against Genie (verified: returns answer + SQL + rows).
+
+> For the CBP FRM target, only the env changes: `DATABRICKS_HOST` + SP `CLIENT_ID`/`SECRET`
+> and a `GENIE_SPACE_ID` on `fe-sandbox-will-wy-frm` (re-auth that profile first). The code
+> is identical.
 
 ## Deploy (production shape)
 

@@ -1,15 +1,16 @@
 """FastAPI backend: the thin tier that holds the service principal and calls Genie.
 
 This is the security boundary. The Databricks credential lives here (server-side),
-never in the Qlik widget. The browser calls POST /api/chat with the user's existing
+never in the browser. The browser calls POST /api/chat with the user's existing
 Qlik/SSO session; this process attaches the SP token and talks to Genie.
 
-Run locally:
+Run:
     pip install -r requirements.txt
     export GENIE_SPACE_ID=<32-hex-space-id>
-    export DATABRICKS_CONFIG_PROFILE=<your-frm-profile>   # dev only
+    export DATABRICKS_CONFIG_PROFILE=<profile>     # dev; prod uses the SP env vars
     uvicorn app:app --reload --port 8000
-Then open http://localhost:8000
+Then open http://localhost:8000  (Qlik-style dashboard with the live Genie chat)
+         http://localhost:8000/chat  (bare chat UI)
 """
 
 import logging
@@ -20,8 +21,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-
-from genie import GenieClient
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("genie-chat")
@@ -39,12 +38,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_client: GenieClient | None = None
+_client = None
 
 
-def client() -> GenieClient:
+def client():
     global _client
     if _client is None:
+        from genie import GenieClient
+
         _client = GenieClient()
     return _client
 
@@ -65,7 +66,7 @@ def chat(req: ChatRequest, request: Request):
         raise HTTPException(status_code=400, detail="question is required")
 
     # Audit chokepoint: because OBO is unavailable under FRM, Databricks only ever sees
-    # the service principal. Attribution to the real CBP user happens HERE. In production,
+    # the service principal. Attribution to the real user happens HERE. In production,
     # derive the user from the validated Qlik/SSO session rather than trusting a header.
     user = request.headers.get("X-Forwarded-User", "anonymous-demo-user")
 
@@ -80,6 +81,12 @@ def chat(req: ChatRequest, request: Request):
 
 
 @app.get("/")
-def index():
-    # Serves the demo chat UI so the backend is runnable standalone.
+def dashboard():
+    # Qlik-style dashboard shell with the live chat docked in — the demo surface.
+    return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+
+@app.get("/chat")
+def bare_chat():
+    # The standalone chat UI (also what the Qlik extension renders).
     return FileResponse(FRONTEND_DIR / "index.html")
