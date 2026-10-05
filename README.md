@@ -62,8 +62,8 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt          # run in your own terminal (needs network)
 
-# A ready-made demo Genie space (NYC taxi sample data) already exists:
-export GENIE_SPACE_ID=01f1bea84fde1d539597ded074d75616
+# The ATAP Trade Analytics Genie space (synthetic CBP trade data) already exists:
+export GENIE_SPACE_ID=01f1c0d5f4d11454a10c7452ec67578a
 export DATABRICKS_CONFIG_PROFILE=fevm-will-wy-demo
 
 uvicorn app:app --reload --port 8000
@@ -73,7 +73,7 @@ Then open:
 - **http://localhost:8000** — Qlik-style dashboard + live chat (the demo surface)
 - **http://localhost:8000/chat** — the bare chat UI (what the Qlik extension renders)
 
-Ask e.g. *"average fare by pickup zip"* or *"top 5 pickup zips by trips"*. This exercises
+Ask e.g. *"Which broker has the highest duty at risk?"* or *"Which importers share an address, email, or phone?"*. This exercises
 the real start → poll → fetch loop against Genie (verified: returns answer + SQL + rows).
 
 > For the CBP FRM target, only the env changes: `DATABRICKS_HOST` + SP `CLIENT_ID`/`SECRET`

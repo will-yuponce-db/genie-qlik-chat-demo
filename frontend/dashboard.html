@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Trade &amp; Mobility Analytics — Qlik-style demo</title>
+<title>ATAP Trade Analytics — Qlik-style demo</title>
 <!--
   LOOK-AND-FEEL DEMO. This page mimics a Qlik Sense sheet so you can show the embedded
-  Genie chat without a Qlik tenant. The dashboard tiles use canned numbers; the chat panel
+  Genie chat without a Qlik tenant. The dashboard tiles are static snapshots of the ATAP gold tables (2026-10-05); the chat panel
   on the right is LIVE — it calls the real backend (/api/chat) which calls Databricks Genie.
   In production this same chat panel is what the Qlik extension renders inside a real sheet.
 -->
@@ -50,7 +50,7 @@
 
   /* CSS bar chart */
   .bars { display: flex; flex-direction: column; gap: 8px; }
-  .bars .row { display: grid; grid-template-columns: 54px 1fr 54px; align-items: center; gap: 8px; font-size: 13px; }
+  .bars .row { display: grid; grid-template-columns: 120px 1fr 54px; align-items: center; gap: 8px; font-size: 13px; }
   .bars .track { background: #eef1f4; border-radius: 4px; height: 16px; overflow: hidden; }
   .bars .fill { height: 100%; background: var(--bar); border-radius: 4px; }
   .bars .num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -73,36 +73,36 @@
 </head>
 <body>
   <div class="appbar">
-    <div class="brand"><span class="q">Q</span> Trade &amp; Mobility Analytics</div>
-    <div class="tabs"><span>Overview</span><span class="active">Trips</span><span>Zones</span><span>Fares</span></div>
+    <div class="brand"><span class="q">Q</span> ATAP Trade Analytics</div>
+    <div class="tabs"><span>Overview</span><span class="active">Collections</span><span>Ports</span><span>Entities</span></div>
     <div class="spacer"></div>
     <div class="user">WY</div>
   </div>
 
   <div class="selbar">
     <span class="lbl">Selections</span>
-    <span class="chip">Year <small>2016</small></span>
-    <span class="chip">Service <small>Yellow</small></span>
-    <span class="chip">Borough <small>Manhattan</small></span>
+    <span class="chip">Filing period <small>Apr–Jul 2026</small></span>
+    <span class="chip">Entry type <small>All</small></span>
+    <span class="chip">Region <small>All ports</small></span>
     <span class="search">Search this app…</span>
   </div>
 
   <div class="stage">
     <div class="sheet">
-      <div class="card kpi"><h3>TOTAL TRIPS</h3><div class="v">21,932</div><div class="d">▲ 3.1% vs prior</div></div>
-      <div class="card kpi"><h3>AVG FARE</h3><div class="v">$12.40</div><div class="d">▲ 1.2%</div></div>
-      <div class="card kpi"><h3>AVG DISTANCE</h3><div class="v">2.85 mi</div><div class="d">▼ 0.4%</div></div>
-      <div class="card kpi"><h3>AVG $ / MILE</h3><div class="v">$4.35</div><div class="d">▲ 0.9%</div></div>
+      <div class="card kpi"><h3>ENTRIES FILED</h3><div class="v">900</div><div class="d">$139.4M customs value</div></div>
+      <div class="card kpi"><h3>DUTY COLLECTED</h3><div class="v">$645.6K</div><div class="d">of $700.0K expected</div></div>
+      <div class="card kpi"><h3>COLLECTION RATE</h3><div class="v">92.2%</div><div class="d" style="color:#b45309">▼ $54.4K shortfall</div></div>
+      <div class="card kpi"><h3>UNDERVALUED LINES</h3><div class="v">302</div><div class="d" style="color:#b45309">$63.2K duty at risk</div></div>
 
       <div class="card wide">
-        <h3>TOP PICKUP ZIP CODES BY TRIPS</h3>
+        <h3>EXAM / HOLD RATE BY PORT</h3>
         <div class="bars" id="bars"></div>
       </div>
 
       <div class="card wide">
-        <h3>PICKUP ZIP DETAIL</h3>
+        <h3>TOP IMPORTERS BY DUTY SHORTFALL</h3>
         <table>
-          <thead><tr><th>Pickup ZIP</th><th class="n">Trips</th><th class="n">Avg fare</th></tr></thead>
+          <thead><tr><th>Importer</th><th>Risk</th><th class="n">Entries</th><th class="n">Shortfall</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
@@ -112,23 +112,28 @@
          genie-chat.js), so what you see here is what the Qlik sheet would show. -->
     <aside class="chat">
       <div class="head"><span class="spark">✦</span> Ask Genie <span class="badge">Databricks Genie · live</span></div>
-      <div class="hint">Try: “average fare by pickup zip” or “how many trips are in the data?”</div>
+      <div class="hint">Try: “Which broker has the highest duty at risk?” or “Which importers share an address, email, or phone?”</div>
       <div id="genie-ext"></div>
     </aside>
   </div>
 
 <script>
   // ---- canned dashboard tiles (static, for look only) ----
-  const zips = [
-    ["10001", 1227, 12.9], ["10003", 1181, 11.4], ["10011", 1129, 12.1],
-    ["10021", 1021, 13.2], ["10018", 1012, 12.7], ["10022", 964, 13.8],
+  const ports = [
+    ["San Diego, CA", 18.6], ["Laredo, TX", 15.8], ["Los Angeles, CA", 9.9],
+    ["New York/Newark", 8.3], ["Houston, TX", 5.4], ["Savannah, GA", 2.4],
   ];
-  const max = Math.max(...zips.map(z => z[1]));
-  document.getElementById("bars").innerHTML = zips.map(z =>
-    `<div class="row"><span>${z[0]}</span><div class="track"><div class="fill" style="width:${(z[1]/max*100).toFixed(0)}%"></div></div><span class="num">${z[1].toLocaleString()}</span></div>`
+  const max = Math.max(...ports.map(p => p[1]));
+  document.getElementById("bars").innerHTML = ports.map(p =>
+    `<div class="row"><span>${p[0]}</span><div class="track"><div class="fill" style="width:${(p[1]/max*100).toFixed(0)}%"></div></div><span class="num">${p[1].toFixed(1)}%</span></div>`
   ).join("");
-  document.getElementById("tbody").innerHTML = zips.map(z =>
-    `<tr><td>${z[0]}</td><td class="n">${z[1].toLocaleString()}</td><td class="n">$${z[2].toFixed(2)}</td></tr>`
+  const importers = [
+    ["Acme Trading Corp", "Watch", 12, 7906], ["Vanguard Housewares", "Standard", 3, 7688],
+    ["Cardinal Supply Co", "Standard", 3, 5054], ["Meridian Global Imports", "Watch", 10, 4466],
+    ["Redstone Commodities", "Watch", 10, 4178], ["Golden Crane Imports", "Watch", 12, 3907],
+  ];
+  document.getElementById("tbody").innerHTML = importers.map(i =>
+    `<tr><td>${i[0]}</td><td>${i[1] === "Watch" ? '<b style="color:#b45309">Watch</b>' : i[1]}</td><td class="n">${i[2]}</td><td class="n">$${i[3].toLocaleString()}</td></tr>`
   ).join("");
 
   // ---- define() shim so the REAL Qlik extension module runs in this plain browser ----
